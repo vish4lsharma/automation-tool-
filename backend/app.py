@@ -81,6 +81,7 @@ def extract_content(file_path, file_extension):
         elif file_extension in ['png', 'jpg', 'jpeg']:
             image = Image.open(file_path)
             return pytesseract.image_to_string(image)
+            print(f"[DEBUG] Extracted content from {file_path}:\n{content[:500]}") 
         else:
             return "Unsupported file type"
     except Exception as e:
@@ -102,6 +103,7 @@ def get_files():
 def search():
     query = request.args.get('query', '').lower()
     file_id = request.args.get('file_id')
+    print("Search query:", query)
 
     if not query:
         return jsonify({'error': 'No search query provided'}), 400
@@ -121,6 +123,8 @@ def search():
         'query': query,
         'results': results
     })
+    print(f"[DEBUG] Search query: '{query}', File ID: {file_id}")
+
 
 def search_in_content(content, query, file_info):
     matches = []
@@ -137,6 +141,7 @@ def search_in_content(content, query, file_info):
                     'match': f"Row {idx + 1}: {row}",
                     'preview': preview
                 })
+        print(f"[DEBUG] Searching in: {file_info['filename']}, content type: {type(content)}")
 
     elif isinstance(content, str):  # Text from PDFs or images
         for idx, line in enumerate(content.splitlines()):
@@ -151,6 +156,19 @@ def search_in_content(content, query, file_info):
                 })
 
     return matches
+@app.route('/api/file-content', methods=['GET'])
+def file_content():
+    file_id = request.args.get('file_id')
+    if not file_id or file_id not in file_storage:
+        return jsonify({'error': 'File not found'}), 404
+    return jsonify({
+        'id': file_id,
+        'filename': file_storage[file_id]['filename'],
+        'type': file_storage[file_id]['type'],
+        'content': file_storage[file_id]['content']
+    })
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
