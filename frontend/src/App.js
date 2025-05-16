@@ -4,133 +4,204 @@ import FileUpload from './components/FileUpload';
 import FileList from './components/FileList';
 import SearchBar from './components/SearchBar';
 import SearchResults from './components/SearchResults';
+import FileViewer from './components/FileViewer';
 
 function App() {
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('files'); // 'files' or 'search'
+  
+  // API URL - change this to match your backend
+  const API_URL = 'http://localhost:5000/api';
 
+  // Fetch files on component mount
   useEffect(() => {
-    // Fetch existing files when component mounts
     fetchFiles();
   }, []);
 
   const fetchFiles = async () => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      const response = await fetch('http://localhost:5000/api/files');
+      const response = await fetch(`${API_URL}/files`);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch files');
+        throw new Error(`Failed to fetch files: ${response.statusText}`);
       }
+      
       const data = await response.json();
-      setFiles(data);
+      
+      // Map response to our file format
+      const mappedFiles = data.map(file => ({
+        id: file.id,
+        name: file.filename,
+        type: file.type
+      }));
+      
+      setFiles(mappedFiles);
     } catch (err) {
-      setError('Error fetching files: ' + err.message);
+      console.error('Error fetching files:', err);
+      setError(`Failed to fetch files: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleFileUpload = async (file) => {
-    setIsLoading(true);
-    setError('');
+    setLoading(true);
+    setError(null);
     
     const formData = new FormData();
     formData.append('file', file);
     
     try {
-      const response = await fetch('http://localhost:5000/api/upload', {
+      const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
-        body: formData,
+        body: formData
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        throw new Error(errorData.error || 'Failed to upload file');
       }
       
       const data = await response.json();
-      setFiles([...files, data]);
-      setIsLoading(false);
+      
+      // Add the new file to our list
+      setFiles(prevFiles => [
+        ...prevFiles, 
+        { 
+          id: data.id, 
+          name: data.filename, 
+          type: data.type 
+        }
+      ]);
+      
+      // Show success message
+      alert('File uploaded successfully!');
     } catch (err) {
-      setError('Error uploading file: ' + err.message);
-      setIsLoading(false);
-    }
-  };
-
-  const handleSearch = async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      let url = `http://localhost:5000/api/search?query=${encodeURIComponent(query)}`;
-      
-      if (selectedFile) {
-        url += `&file_id=${selectedFile.id}`;
-      }
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
-      
-      const data = await response.json();
-      setSearchResults(data.results);
-      setIsLoading(false);
-    } catch (err) {
-      setError('Error searching: ' + err.message);
-      setIsLoading(false);
+      console.error('Error uploading file:', err);
+      setError(`Failed to upload file: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleFileSelect = (file) => {
-    setSelectedFile(file === selectedFile ? null : file);
+    setSelectedFile(file);
+    // When a file is selected, switch to the file view tab
+    setActiveTab('files');
+  };
+
+  const handleSearch = async (query, fileId = null) => {
+    if (!query) return;
+    
+    setLoading(true);
+    setError(null);
     setSearchResults([]);
+    
+    try {
+      let searchUrl = `${API_URL}/search?query=${encodeURIComponent(query)}`;
+      
+      if (fileId) {
+        searchUrl += `&file_id=${fileId}`;
+      }
+      
+      const response = await fetch(searchUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Search failed: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setSearchResults(data.results);
+      
+      // Switch to search results tab
+      setActiveTab('search');
+    } catch (err) {
+      console.error('Error searching:', err);
+      setError(`Search failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchInFile = (file) => {
+    const searchQuery = prompt('Enter search term:');
+    if (searchQuery) {
+      handleSearch(searchQuery, file.id);
+    }
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
+    <div className="app">
+      <header className="app-header">
         <h1>Document Search System</h1>
+        <p>Upload, view, and search through various document types</p>
       </header>
-      <main className="App-main">
-        <div className="container">
-          <FileUpload onFileUpload={handleFileUpload} isLoading={isLoading} />
-          
-          <div className="search-container">
-            <SearchBar onSearch={handleSearch} isLoading={isLoading} />
-            {selectedFile && (
-              <div className="selected-file">
-                Searching in: {selectedFile.filename}
-                <button onClick={() => setSelectedFile(null)}>Clear Selection</button>
-              </div>
-            )}
+      
+      <main className="app-main">
+        <div className="sidebar">
+          <FileUpload onFileUpload={handleFileUpload} />
+          <FileList 
+            files={files} 
+            onFileSelect={handleFileSelect} 
+            onSearchInFile={handleSearchInFile}
+            selectedFile={selectedFile}
+          />
+        </div>
+        
+        <div className="content">
+          <div className="search-controls">
+            <SearchBar onSearch={handleSearch} />
+            <div className="tabs">
+              <button 
+                className={`tab-btn ${activeTab === 'files' ? 'active' : ''}`}
+                onClick={() => setActiveTab('files')}
+              >
+                File View
+              </button>
+              <button 
+                className={`tab-btn ${activeTab === 'search' ? 'active' : ''}`}
+                onClick={() => setActiveTab('search')}
+              >
+                Search Results
+              </button>
+            </div>
           </div>
+          
+          {loading && <div className="loading">Loading...</div>}
           
           {error && <div className="error-message">{error}</div>}
           
-          <div className="content-container">
-            <div className="file-list-container">
-              <h2>Uploaded Files</h2>
-              <FileList 
-                files={files} 
-                onFileSelect={handleFileSelect} 
-                selectedFile={selectedFile} 
-              />
-            </div>
-            
-            <div className="search-results-container">
-              <h2>Search Results</h2>
-              <SearchResults results={searchResults} isLoading={isLoading} />
-            </div>
+          <div className={`tab-content ${activeTab === 'files' ? 'active' : ''}`}>
+            <FileViewer 
+              selectedFile={selectedFile} 
+              apiUrl={API_URL} 
+            />
+          </div>
+          
+          <div className={`tab-content ${activeTab === 'search' ? 'active' : ''}`}>
+            <SearchResults 
+              results={searchResults}
+              onFileSelect={(fileId) => {
+                const file = files.find(f => f.id === fileId);
+                if (file) {
+                  handleFileSelect(file);
+                }
+              }}
+            />
           </div>
         </div>
       </main>
+      
+      <footer className="app-footer">
+        <p>Document Search System &copy; 2025</p>
+      </footer>
     </div>
   );
 }

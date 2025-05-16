@@ -1,79 +1,93 @@
 import React from 'react';
 import './SearchResults.css';
 
-const SearchResults = ({ results, isLoading }) => {
-  if (isLoading) {
-    return (
-      <div className="search-loading">
-        <p>Searching documents...</p>
-      </div>
-    );
-  }
+const SearchResults = ({ results, onFileSelect }) => {
+  // Helper function to group results by file
+  const groupResultsByFile = () => {
+    const groupedResults = {};
+    
+    results.forEach(result => {
+      const fileId = result.file_id;
+      
+      if (!groupedResults[fileId]) {
+        groupedResults[fileId] = {
+          id: fileId,
+          filename: result.filename,
+          type: result.type,
+          matches: []
+        };
+      }
+      
+      groupedResults[fileId].matches.push(result);
+    });
+    
+    return Object.values(groupedResults);
+  };
+
+  // Get file type icon
+  const getFileIcon = (fileType) => {
+    switch (fileType) {
+      case 'pdf':
+        return '📄';
+      case 'xlsx':
+      case 'xls':
+        return '📊';
+      case 'csv':
+        return '📋';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+        return '🖼️';
+      default:
+        return '📁';
+    }
+  };
+
+  const groupedResults = groupResultsByFile();
 
   if (results.length === 0) {
     return (
-      <div className="no-results">
-        <p>No search results to display. Try searching for something.</p>
+      <div className="search-results empty">
+        <div className="no-results">
+          <p>No search results to display</p>
+          <small>Try searching for something in your uploaded files</small>
+        </div>
       </div>
     );
   }
 
-  // Group results by file
-  const resultsByFile = results.reduce((acc, result) => {
-    if (!acc[result.filename]) {
-      acc[result.filename] = [];
-    }
-    acc[result.filename].push(result);
-    return acc;
-  }, {});
-
   return (
     <div className="search-results">
-      <div className="results-count">
-        <span>{results.length} {results.length === 1 ? 'result' : 'results'} found</span>
-      </div>
-
-      {Object.keys(resultsByFile).map((filename) => (
-        <div key={filename} className="result-file-group">
-          <div className="result-file-header">
-            <span className="result-file-icon">
-              {getFileIcon(resultsByFile[filename][0].type)}
-            </span>
-            <span className="result-file-name">{filename}</span>
-            <span className="result-count">
-              {resultsByFile[filename].length} {resultsByFile[filename].length === 1 ? 'match' : 'matches'}
-            </span>
+      <h2>Search Results ({results.length} matches found)</h2>
+      
+      {groupedResults.map(fileGroup => (
+        <div key={fileGroup.id} className="result-group">
+          <div className="file-header">
+            <div className="file-info">
+              <span className="file-icon">{getFileIcon(fileGroup.type)}</span>
+              <span className="file-name">{fileGroup.filename}</span>
+            </div>
+            <button 
+              className="view-file-btn"
+              onClick={() => onFileSelect(fileGroup.id)}
+            >
+              View Full File
+            </button>
           </div>
           
-          <ul className="result-matches">
-            {resultsByFile[filename].map((result, index) => (
-              <li key={`${result.file_id}-${index}`} className="result-match-item">
-                <div className="result-match-preview">{result.preview}</div>
-              </li>
+          <div className="matches">
+            {fileGroup.matches.map((match, index) => (
+              <div key={index} className="match-item">
+                <div className="match-preview">
+                  <p>{match.preview}</p>
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       ))}
     </div>
   );
-};
-
-// Function to determine file icon based on file type
-const getFileIcon = (fileType) => {
-  switch (fileType.toLowerCase()) {
-    case 'pdf':
-      return '📄';
-    case 'xlsx':
-    case 'xls':
-    case 'csv':
-      return '📊';
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-      return '🖼️';
-    default:
-      return '📁';
-  }
 };
 
 export default SearchResults;
